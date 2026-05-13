@@ -37,10 +37,21 @@ class SimulatorComparisonStep(Step):
             "engine_b_result": "numeric_result",
         }
 
-    def outputs(self) -> Dict[str, str]:
-        # `tree[any]` accepts the free-form comparison dict without requiring
-        # a registered named type. Concrete keys/types are documented above.
-        return {"comparison": "tree[any]"}
+    def outputs(self) -> Dict[str, Any]:
+        # Concrete struct shape matches the dict returned by
+        # `pbg_biomodels_bundle.comparison.compare_two_engines`. Declared
+        # inline (rather than registered as a named type) so the bundle has
+        # no module-init order requirement on workspace `register_types`.
+        return {
+            "comparison": {
+                "n_shared":         "integer",
+                "rmse_by_species":  "map[float]",
+                "nrmse_by_species": "map[float]",
+                "mean_nrmse":       "maybe[float]",
+                "bucket":           "string",
+                "bucket_label":     "string",
+            }
+        }
 
     def update(self, state: Dict[str, Any]) -> Dict[str, Any]:
         summary = compare_two_engines(

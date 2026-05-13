@@ -452,9 +452,6 @@ def make_biomodel_document(
 # Runner
 # ----------------------------
 import zipfile
-import pbest
-from pbest.utils.input_types import ExecutionProgramArguments
-import pbest as pb
 
 
 async def submit_composite_document(
@@ -468,6 +465,12 @@ async def submit_composite_document(
     retry_delay: float = 5.0,
     sbml_path: Optional[str] = None,
 ):
+    # Lazy-imported because the rest of this module (load_biomodel,
+    # make_biomodel_document, run_composite_document) doesn't need them, and
+    # ExecutionProgramArguments has historically moved around in pbest.
+    import pbest as pb
+    from pbest.utils.input_types import ExecutionProgramArguments
+
     outdir = Path(outdir)
     # Create Omex that gets sent to the server
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
