@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -28,6 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from plotly.offline import get_plotlyjs
 
 from process_bigraph import Step
+
+from pbg_biomodels_bundle.comparison import compare_two_engines
 
 
 # ---------------------------------------------------------------------------
@@ -44,90 +45,21 @@ def _load_results(results_dir: str) -> List[Dict[str, Any]]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Per-model summary + bucketing
-# ---------------------------------------------------------------------------
-
-# Normalized-RMSE thresholds (mean across shared species).
-_BUCKET_THRESHOLDS = [
-    ("good",       0.01,  "Good (≤1%)"),
-    ("borderline", 0.10,  "Borderline (1–10%)"),
-    ("large",      math.inf, "Large diff (>10%)"),
-]
-_NO_COMPARISON_BUCKET = ("none", "No comparison")
-
-
-def _union_species(engines: Dict[str, Any]) -> List[str]:
-    species: List[str] = []
-    seen = set()
-    for payload in engines.values():
-        if not payload:
-            continue
-        for c in payload.get("columns", []):
-            if c not in seen:
-                seen.add(c)
-                species.append(c)
-    return species
-
-
 def _compute_model_summary(model: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute per-species RMSE, normalized RMSE, and a quality bucket."""
+    """Compute per-species RMSE, normalized RMSE, and a quality bucket.
+
+    Thin shim around :func:`pbg_biomodels_bundle.comparison.compare_two_engines`
+    that pulls the COPASI/Tellurium payloads out of a stored per-model record.
+    Both engines are looked up by name; absent engines fall through to the
+    "no comparison" bucket.
+    """
     engines = model.get("engines") or {}
-    species = _union_species(engines)
-
-    rmse_by_species: Dict[str, float] = {}
-    nrmse_by_species: Dict[str, float] = {}
-    n_shared = 0
-
-    for sp in species:
-        ys_per_engine: Dict[str, List[float]] = {}
-        for eng_name, payload in engines.items():
-            if not payload:
-                continue
-            cols = payload.get("columns", [])
-            if sp not in cols:
-                continue
-            j = cols.index(sp)
-            ys_per_engine[eng_name] = [row[j] for row in payload.get("values", [])]
-        if len(ys_per_engine) < 2:
-            continue
-        n_shared += 1
-        keys = sorted(ys_per_engine.keys())
-        y1, y2 = ys_per_engine[keys[0]], ys_per_engine[keys[1]]
-        n = min(len(y1), len(y2))
-        if n == 0:
-            continue
-        rmse = math.sqrt(sum((y1[k] - y2[k]) ** 2 for k in range(n)) / n)
-        rmse_by_species[sp] = rmse
-        denom = max(
-            (abs(v) for v in y1[:n]), default=0.0
-        )
-        denom = max(denom, max((abs(v) for v in y2[:n]), default=0.0))
-        if denom > 0:
-            nrmse_by_species[sp] = rmse / denom
-
-    mean_nrmse: Optional[float]
-    if nrmse_by_species:
-        mean_nrmse = sum(nrmse_by_species.values()) / len(nrmse_by_species)
-    else:
-        mean_nrmse = None
-
-    if mean_nrmse is None:
-        bucket_id, bucket_label = _NO_COMPARISON_BUCKET
-    else:
-        for bid, threshold, label in _BUCKET_THRESHOLDS:
-            if mean_nrmse <= threshold:
-                bucket_id, bucket_label = bid, label
-                break
-
-    return {
-        "n_shared": n_shared,
-        "rmse_by_species": rmse_by_species,
-        "nrmse_by_species": nrmse_by_species,
-        "mean_nrmse": mean_nrmse,
-        "bucket": bucket_id,
-        "bucket_label": bucket_label,
-    }
+    keys = sorted(engines.keys())
+    a_key = keys[0] if keys else "a"
+    b_key = keys[1] if len(keys) > 1 else (keys[0] if keys else "b")
+    return compare_two_engines(
+        engines.get(a_key), engines.get(b_key), name_a=a_key, name_b=b_key,
+    )
 
 
 # ---------------------------------------------------------------------------
