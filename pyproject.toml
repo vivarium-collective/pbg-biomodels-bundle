@@ -32,7 +32,7 @@ dev = [
 # Make sure all subpackages are included
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["biomodels_regression*"]
+include = ["pbg_biomodels_bundle*"]
 exclude = ["tests*", "docs*"]
 
 # If you want console entry points later, uncomment and edit:
